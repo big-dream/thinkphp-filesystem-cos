@@ -1,5 +1,5 @@
 {
-    "name": "big-dream/think-filesystem-driver",
+    "name": "big-dream/thinkphp-filesystem-cos",
     "description": "ThinkPHP6文件系统驱动 COS版",
     "keywords": [
       "thinkphp",
