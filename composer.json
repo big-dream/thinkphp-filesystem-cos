@@ -17,7 +17,6 @@
     ],
     "require": {
       "php": ">=7.4.0",
-      "topthink/framework": "^6.0.0",
       "overtrue/flysystem-cos": "^4.0"
     },
     "autoload": {
