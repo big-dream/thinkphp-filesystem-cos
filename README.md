@@ -36,27 +36,36 @@ return [
 
         /** 以下为新增的磁盘配置信息 **/
         'cos' => [
-            // 磁盘类型
-            'type'            => \bigDream\thinkphp\filesystem\Cos::class,
-            // 必填，app_id、secret_id、secret_key 
-            // 可在个人秘钥管理页查看：https://console.cloud.tencent.com/capi
-            'app_id' => 10020201024, 
-            'secret_id' => 'AKIDsiQzQla780mQxLLU2GJCxxxxxxxxxxx', 
-            'secret_key' => 'b0GMH2c2NXWKxPhy77xhHgwxxxxxxxxxxx',
-
-            'region' => 'ap-guangzhou', 
-            'bucket' => 'example',
-            
-            // 可选，如果 bucket 为私有访问请打开此项
-            'signed_url' => false,
-            
-            // 可选，使用 CDN 域名时指定生成的 URL host
-            'cdn' => 'https://youcdn.domain.com/',
-                ],
-                /** 以上为新增的磁盘配置信息 **/
-
-                // 更多的磁盘配置信息
+            'type' => \bigDream\thinkphp\filesystem\Cos::class,
+            // 可见性（public=公共读，private=私有读）
+            'visibility' => 'public',
+            // 磁盘路径对应的外部URL路径（Bucket域名）
+            'url'      => 'https://test.gdoss.xstore.ctyun.cn',
+            // 地域
+            'region'          => 'ap-guangzhou',
+            // 认证凭证
+            'credentials'     => [
+                'appId'     => '', // 域名中数字部分
+                'secretId'  => '',
+                'secretKey' => '',
             ],
+            // 储存桶
+            'bucket'          => '',
+            // 超时时间
+            'timeout'         => '',
+            // 连接超时时间
+            'connect_timeout' => 60,
+            // CDN 域名
+            'cdn'             => '',
+            // 协议
+            'scheme'          => '',
+            // 从CDN读取 
+            'read_from_cdn'   => false,
+        ],
+        /** 以上为新增的磁盘配置信息 **/
+
+        // 更多的磁盘配置信息
+    ],
 ];
 
 ```
