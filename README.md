@@ -1,4 +1,4 @@
-# ThinkPHP 文件系统驱动 COS 腾讯云对象储存
+# ThinkPHP 6.1 文件系统驱动 COS 腾讯云对象储存
 
 内含以下文件系统驱动
 
@@ -6,7 +6,7 @@
 
 ## 安装
 ```
-composer require big-dream/thinkphp-filesystem-cos
+composer require big-dream/thinkphp-filesystem-cos:2.*
 ```
 
 ## 配置
@@ -41,26 +41,21 @@ return [
             'visibility' => 'public',
             // 磁盘路径对应的外部URL路径（Bucket域名）
             'url'      => 'https://test.gdoss.xstore.ctyun.cn',
+            // 必填，app_id、secret_id、secret_key
+            // 可在个人秘钥管理页查看：https://console.cloud.tencent.com/capi
+            'app_id' => 10020201024,
+            'secret_id' => 'AKIDsiQzQla780mQxLLU2GJCxxxxxxxxxxx',
+            'secret_key' => 'b0GMH2c2NXWKxPhy77xhHgwxxxxxxxxxxx',
             // 地域
-            'region'          => 'ap-guangzhou',
-            // 认证凭证
-            'credentials'     => [
-                'appId'     => '', // 域名中数字部分
-                'secretId'  => '',
-                'secretKey' => '',
-            ],
+            'region' => 'ap-guangzhou',
             // 储存桶
-            'bucket'          => '',
-            // 超时时间
-            'timeout'         => '',
-            // 连接超时时间
-            'connect_timeout' => 60,
-            // CDN 域名
-            'cdn'             => '',
-            // 协议
-            'scheme'          => '',
-            // 从CDN读取 
-            'read_from_cdn'   => false,
+            'bucket' => 'example',
+    
+            // 可选，如果 bucket 为私有访问请打开此项
+            'signed_url' => false,
+    
+            // 可选，使用 CDN 域名时指定生成的 URL host
+            'cdn' => 'https://youcdn.domain.com/',
         ],
         /** 以上为新增的磁盘配置信息 **/
 
