@@ -17,9 +17,9 @@
       }
     ],
     "require": {
-      "php": ">=7.1.0",
-      "overtrue/flysystem-cos": "4.0",
-      "topthink/think-filesystem": "^2.0"
+      "php": ">=7.2.5",
+      "topthink/think-filesystem": "^2.0",
+      "qcloud/cos-sdk-v5": "^2.6"
     },
     "autoload": {
       "psr-4": {

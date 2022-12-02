@@ -4,7 +4,6 @@ declare (strict_types = 1);
 namespace bigDream\thinkphp\filesystem;
 
 use League\Flysystem\FilesystemAdapter;
-use Overtrue\Flysystem\Cos\CosAdapter;
 use think\filesystem\Driver;
 
 class Cos extends Driver
