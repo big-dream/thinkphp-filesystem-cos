@@ -4,6 +4,9 @@ declare (strict_types = 1);
 namespace bigDream\thinkphp\filesystem;
 
 use League\Flysystem\FilesystemAdapter;
+use League\Flysystem\PathNormalizer;
+use League\Flysystem\PathPrefixer;
+use League\Flysystem\WhitespacePathNormalizer;
 use think\filesystem\Driver;
 
 class Cos extends Driver
@@ -35,8 +38,53 @@ class Cos extends Driver
         'prefix' => '',
     ];
 
+    /**
+     * @var PathPrefixer
+     */
+    protected $prefixer;
+
+    /**
+     * @var PathNormalizer
+     */
+    protected $normalizer;
+
     protected function createAdapter(): FilesystemAdapter
     {
         return new CosAdapter($this->config);
+    }
+
+    protected function prefixer()
+    {
+        if (null === $this->prefixer) {
+            $this->prefixer = new PathPrefixer($this->config['prefix']);
+        }
+
+        return $this->prefixer;
+    }
+
+    protected function normalizer()
+    {
+        if (null === $this->normalizer) {
+            $this->normalizer = new WhitespacePathNormalizer();
+        }
+
+        return $this->normalizer;
+    }
+
+    /**
+     * 获取文件访问地址
+     * @param string $path 文件路径
+     * @return string
+     */
+    public function url(string $path): string
+    {
+        $path = $this->prefixer()->prefixPath($path);
+        $path = $this->normalizer()->normalizePath($path);
+
+        if (isset($this->config['url'])) {
+            return $this->concatPathToUrl($this->config['url'], $path);
+        }
+
+        return parent::url($path);
     }
 }
