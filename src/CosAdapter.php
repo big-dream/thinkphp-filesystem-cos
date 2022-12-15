@@ -2,33 +2,25 @@
 
 namespace bigDream\thinkphp\filesystem;
 
-use GuzzleHttp\Psr7\Uri;
+use GuzzleHttp\Command\Result;
 use League\Flysystem\Config;
 use League\Flysystem\DirectoryAttributes;
 use League\Flysystem\FileAttributes;
 use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\PathPrefixer;
 use League\Flysystem\UnableToCopyFile;
-use League\Flysystem\UnableToDeleteDirectory;
 use League\Flysystem\UnableToDeleteFile;
 use League\Flysystem\UnableToReadFile;
 use League\Flysystem\UnableToRetrieveMetadata;
-use League\Flysystem\UnableToWriteFile;
 use League\Flysystem\Visibility;
-use Overtrue\CosClient\ObjectClient;
-use Overtrue\CosClient\BucketClient;
+use Qcloud\Cos\Client;
 
 class CosAdapter implements FilesystemAdapter
 {
     /**
-     * @var ObjectClient|null
+     * @var Client|null
      */
-    protected $objectClient;
-
-    /**
-     * @var BucketClient|null
-     */
-    protected $bucketClient;
+    protected $client;
 
     /**
      * @var PathPrefixer
@@ -52,7 +44,6 @@ class CosAdapter implements FilesystemAdapter
                 'bucket' => null,
                 'app_id' => null,
                 'region' => 'ap-guangzhou',
-                'signed_url' => false,
             ],
             $config
         );
@@ -62,21 +53,15 @@ class CosAdapter implements FilesystemAdapter
 
     public function fileExists(string $path): bool
     {
-        return $this->getMetadata($path) !== null;
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+        return $this->getClient()->doesObjectExist($bucket, $path);
     }
 
     public function write(string $path, string $contents, Config $config): void
     {
-        $prefixedPath = $this->prefixer->prefixPath($path);
-        $response = $this->getObjectClient()->putObject($prefixedPath, $contents, $config->get('headers', []));
-
-        if (!$response->isSuccessful()) {
-            throw UnableToWriteFile::atLocation($path, (string)$response->getBody());
-        }
-
-        if ($visibility = $config->get('visibility')) {
-            $this->setVisibility($path, $visibility);
-        }
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+        $options = ['ACL' => $this->normalizeVisibility($config->get('visibility'))];
+        $this->getClient()->upload($bucket, $path, $contents, $options);
     }
 
     public function writeStream(string $path, $contents, Config $config): void
@@ -84,115 +69,117 @@ class CosAdapter implements FilesystemAdapter
         $this->write($path, \stream_get_contents($contents), $config);
     }
 
-    public function readStream(string $path)
-    {
-        $prefixedPath = $this->prefixer->prefixPath($path);
-
-        $response = $this->getObjectClient()->get(\urlencode($prefixedPath), ['stream' => true]);
-
-        if ($response->isNotFound()) {
-            return false;
-        }
-
-        return $response->getBody()->detach();
-    }
-
     public function read(string $path): string
     {
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
         $prefixedPath = $this->prefixer->prefixPath($path);
 
-        $response = $this->getObjectClient()->getObject($prefixedPath);
-        if ($response->isNotFound()) {
-            throw UnableToReadFile::fromLocation($path, (string)$response->getBody());
+        try {
+            /** @var Result $response */
+            $response = $this->getClient()->getObject([
+                'Bucket' => $bucket,
+                'Key' => $prefixedPath,
+            ]);
+        } catch (\Exception $e) {
+            throw UnableToReadFile::fromLocation($path, $e->getMessage());
         }
 
-        return (string)$response->getBody();
+        return $response['Body'];
     }
 
-    public function move(string $source, string $destination, Config $config): void
+    public function readStream(string $path)
     {
-        $this->copy($source, $destination, $config);
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+        $prefixedPath = $this->prefixer->prefixPath($path);
 
-        $this->delete($this->prefixer->prefixPath($source));
-    }
-
-    public function copy(string $source, string $destination, Config $config): void
-    {
-        $prefixedSource = $this->prefixer->prefixPath($source);
-
-        $location = $this->getSourcePath($prefixedSource);
-
-        $prefixedDestination = $this->prefixer->prefixPath($destination);
-
-        $response = $this->getObjectClient()->copyObject(
-            $prefixedDestination,
-            [
-                'x-cos-copy-source' => $location,
-            ]
-        );
-        if (!$response->isSuccessful()) {
-            throw UnableToCopyFile::fromLocationTo($source, $destination);
+        try {
+            /** @var Result $response */
+            $response = $this->getClient()->getObject([
+                'Bucket' => $bucket,
+                'Key' => $prefixedPath,
+            ]);
+        } catch (\Exception $e) {
+            throw UnableToReadFile::fromLocation($path, (string)$e->getMessage());
         }
+
+        return $response['Body'];
     }
 
     public function delete(string $path): void
     {
         $prefixedPath = $this->prefixer->prefixPath($path);
 
-        $response = $this->getObjectClient()->deleteObject($prefixedPath);
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
 
-        if (!$response->isSuccessful()) {
-            throw UnableToDeleteFile::atLocation($path, (string)$response->getBody());
+        try {
+            $this->getClient()->deleteObject([
+                'Bucket' => $bucket,
+                'Key' => $prefixedPath,
+            ]);
+        } catch (\Exception $e) {
+            throw UnableToDeleteFile::atLocation($prefixedPath, $e->getMessage());
         }
     }
 
-    public function listContents(string $path, bool $deep): iterable
+    public function deleteDirectory(string $path): void
     {
-        $prefixedPath = $this->prefixer->prefixPath($path);
-
-        $response = $this->listObjects($prefixedPath, $deep);
-
-        // 处理目录
-        foreach ($response['CommonPrefixes'] ?? [] as $prefix) {
-            yield new DirectoryAttributes($prefix);
+        $list = [];
+        foreach ($this->listContents($path . '/', true) as $item) {
+            $list[] = $item->path();
         }
 
-        foreach ($response['Contents'] ?? [] as $content) {
-            yield new FileAttributes(
-                $content['Key'],
-                \intval($content['Size']),
-                null,
-                \strtotime($content['LastModified'])
-            );
+        foreach (array_reverse($list) as $path)
+        {
+            $this->delete($path);
         }
     }
 
-    public function getMetadata($path): ?FileAttributes
+    public function createDirectory(string $path, Config $config): void
     {
-        $prefixedPath = $this->prefixer->prefixPath($path);
+        $dirname = rtrim($this->prefixer->prefixPath($path), '/') . '/';
 
-        $meta = $this->getObjectClient()->headObject($prefixedPath)->getHeaders();
-        if (empty($meta)) {
-            return null;
-        }
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
 
-        return new FileAttributes(
-            $path,
-            isset($meta['Content-Length'][0]) ? \intval($meta['Content-Length'][0]) : null,
-            null,
-            isset($meta['Last-Modified'][0]) ? \strtotime($meta['Last-Modified'][0]) : null,
-            $meta['Content-Type'][0] ?? null
-        );
+        $this->getClient()->putObject([
+            'Bucket' => $bucket,
+            'Key' => $dirname,
+            'Body' => '',
+        ]);
     }
 
-    public function fileSize(string $path): FileAttributes
+    public function setVisibility(string $path, string $visibility): void
     {
-        $meta = $this->getMetadata($path);
-        if ($meta->fileSize() === null) {
-            throw UnableToRetrieveMetadata::fileSize($path);
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+
+        $this->getClient()->putObjectAcl([
+            'Bucket' => $bucket,
+            'Key' => $this->prefixer->prefixPath($path),
+            'ACL' => $this->normalizeVisibility($visibility),
+        ]);
+    }
+
+    public function visibility(string $path): FileAttributes
+    {
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+
+        $response = $this->getClient()->getObjectAcl([
+            'Bucket' => $bucket,
+            'Key' => $this->prefixer->prefixPath($path),
+        ]);
+
+        foreach ($response['Grants'] as $grants) {
+            foreach ($grants as $grant) {
+                if ((array_keys($grant) !== range(0, count($grant) - 1))) continue;
+
+                foreach ($grant as $acl) {
+                    if ('READ' === $acl['Permission'] && strpos($acl['Grantee']['URI'] ?? '', '/groups/global/AllUsers')) {
+                        return new FileAttributes($response['Key'], null, Visibility::PUBLIC);
+                    }
+                }
+            }
         }
 
-        return $meta;
+        return new FileAttributes($response['Key'], null, Visibility::PRIVATE);
     }
 
     public function mimeType(string $path): FileAttributes
@@ -214,118 +201,125 @@ class CosAdapter implements FilesystemAdapter
         return $meta;
     }
 
-    public function visibility(string $path): FileAttributes
+    public function fileSize(string $path): FileAttributes
     {
-        $prefixedPath = $this->prefixer->prefixPath($path);
+        $meta = $this->getMetadata($path);
+        if ($meta->fileSize() === null) {
+            throw UnableToRetrieveMetadata::fileSize($path);
+        }
 
-        $meta = $this->getObjectClient()->getObjectACL($prefixedPath);
+        return $meta;
+    }
 
-        foreach ($meta['AccessControlPolicy']['AccessControlList']['Grant'] ?? [] as $grant) {
-            if ('READ' === $grant['Permission'] && false !== strpos($grant['Grantee']['URI'] ?? '', 'global/AllUsers')) {
-                return new FileAttributes($path, null, Visibility::PUBLIC);
+    public function listContents(string $path, bool $deep): iterable
+    {
+        $prefixedPath = rtrim($this->prefixer->prefixPath($path), '/');
+
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+
+        $result = $this->getClient()->listObjects([
+            'Bucket'       => $bucket,
+            'Delimiter'    => $deep ? '' : '/',
+            'EncodingType' => 'url',
+            'Prefix'       => $prefixedPath . '/',
+        ]);
+
+        foreach ($result['Contents'] ?? [] as $content) {
+            $extra = [
+                'ETag'         => $content['ETag'],
+                'StorageClass' => $content['StorageClass'],
+                'Owner'        => $content['Owner'],
+            ];
+            $lastModified = strtotime($content['LastModified']);
+            if (false === strpos($content['Key'], '/', -1)) {
+                yield new FileAttributes($content['Key'], (int)$content['Size'], null, $lastModified, null, $extra);
+            } else {
+                yield new DirectoryAttributes($content['Key'], null, $lastModified, $extra);
             }
         }
-
-        return new FileAttributes($path, null, Visibility::PRIVATE);
     }
 
-    public function setVisibility(string $path, string $visibility): void
+    public function move(string $source, string $destination, $config = []): void
     {
-        $this->getObjectClient()->putObjectACL(
-            $this->prefixer->prefixPath($path),
-            [],
-            [
-                'x-cos-acl' => $this->normalizeVisibility($visibility),
-            ]
-        );
+        $this->copy($source, $destination, $config);
+
+        $this->delete($source);
     }
 
-    public function createDirectory(string $path, Config $config): void
+    public function copy(string $source, string $destination, Config $config): void
     {
-        $dirname = $this->prefixer->prefixPath($path);
+        $prefixedSource = $this->prefixer->prefixPath($source);
 
-        $this->getObjectClient()->putObject($dirname . '/', '');
-    }
+        $location = $this->getSourcePath($prefixedSource);
 
-    public function deleteDirectory(string $path): void
-    {
-        $dirname = $this->prefixer->prefixPath($path);
+        $prefixedDestination = $this->prefixer->prefixPath($destination);
 
-        $response = $this->listObjects($dirname);
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
 
-        if (empty($response['Contents'])) {
-            return;
-        }
+        $copySource = [
+            'Region' => $this->config['region'],
+            'Bucket' => $bucket,
+            'Key'    => $prefixedSource,
+        ];
 
-        $keys = array_map(
-            function ($item) {
-                return ['Key' => $item['Key']];
-            },
-            $response['Contents']
-        );
+        $options = [
+            'x-cos-copy-source' => $location,
+        ];
 
-        $response = $this->getObjectClient()->deleteObjects(
-            [
-                'Delete' => [
-                    'Quiet' => 'false',
-                    'Object' => $keys,
-                ],
-            ]
-        );
-
-        if (!$response->isSuccessful()) {
-            throw UnableToDeleteDirectory::atLocation($path, (string) $response->getBody());
+        try {
+            /** @var Result $response */
+            $this->getClient()->copy($bucket, $prefixedDestination, $copySource, $options);
+        } catch (\Exception $e) {
+            throw UnableToCopyFile::fromLocationTo($prefixedSource, $prefixedDestination, $e);
         }
     }
 
-    public function getUrl(string $path)
+    public function getMetadata($path): FileAttributes
     {
         $prefixedPath = $this->prefixer->prefixPath($path);
 
-        if (!empty($this->config['cdn'])) {
-            return \strval(new Uri(\sprintf('%s/%s', \rtrim($this->config['cdn'], '/'), $prefixedPath)));
+        $bucket = $this->config['bucket'] . '-' . $this->config['app_id'];
+
+        try {
+            /**
+             * @var Result $response
+             */
+            $response = $this->getClient()->headObject([
+                'Bucket' => $bucket,
+                'Key' => $prefixedPath,
+            ]);
+        } catch (\Exception $e) {
+            throw new UnableToRetrieveMetadata($e->getMessage(), 0, $e);
         }
 
-        return $this->config['signed_url'] ? $this->getSignedUrl($path) : $this->getObjectClient()->getObjectUrl($prefixedPath);
+        return new FileAttributes(
+            $response['Key'],
+            $response['ContentLength'],
+            null,
+            strtotime($response['LastModified']),
+            $response['ContentType'],
+            $response->toArray()
+        );
     }
 
-    public function getSignedUrl(string $path, string $expires = '+60 minutes'): string
+    public function getClient()
     {
-        $prefixedPath = $this->prefixer->prefixPath($path);
-
-        return $this->getObjectClient()->getObjectSignedUrl($prefixedPath, $expires);
-    }
-
-    public function getObjectClient()
-    {
-        return $this->objectClient ?? $this->objectClient = new ObjectClient($this->config);
-    }
-
-    public function getBucketClient()
-    {
-        return $this->bucketClient ?? $this->bucketClient = new BucketClient($this->config);
-    }
-
-    /**
-     * @param ObjectClient $objectClient
-     *
-     * @return $this
-     */
-    public function setObjectClient(ObjectClient $objectClient)
-    {
-        $this->objectClient = $objectClient;
-
-        return $this;
+        return $this->client ?? $this->client = new Client(array(
+            'region' => $this->config['region'],
+            'credentials' => array(
+                'secretId' => $this->config['secret_id'],
+                'secretKey' => $this->config['secret_key']
+            )
+        ));
     }
 
     /**
-     * @param BucketClient $bucketClient
-     *
+     * @param Client $client
      * @return $this
      */
-    public function setBucketClient(BucketClient $bucketClient)
+    public function setClient(Client $client): self
     {
-        $this->bucketClient = $bucketClient;
+        $this->client = $client;
 
         return $this;
     }
@@ -346,46 +340,9 @@ class CosAdapter implements FilesystemAdapter
         );
     }
 
-    /**
-     * @param string $directory
-     * @param bool $recursive
-     *
-     * @return mixed
-     */
-    protected function listObjects($directory = '', $recursive = false)
-    {
-        $result = $this->getBucketClient()->getObjects(
-            [
-                'prefix' => ('' === (string)$directory) ? '' : ($directory . '/'),
-                'delimiter' => $recursive ? '' : '/',
-            ]
-        )['ListBucketResult'];
-
-        foreach (['CommonPrefixes', 'Contents'] as $key) {
-            $result[$key] = $result[$key] ?? [];
-
-            // 确保是二维数组
-            if (($index = \key($result[$key])) !== 0) {
-                $result[$key] = \is_null($index) ? [] : [$result[$key]];
-            }
-        }
-
-        return $result;
-    }
-
     protected function normalizeVisibility(string $visibility): string
     {
-        return $visibility === Visibility::PUBLIC ? 'public-read' : 'default';
-    }
-
-    protected function toResource(string $body)
-    {
-        $resource = fopen('php://temp', 'r+');
-        if ($body !== '') {
-            fwrite($resource, $body);
-            fseek($resource, 0);
-        }
-
-        return $resource;
+        if ('' === $visibility) return 'default';
+        return $visibility === Visibility::PUBLIC ? 'public-read' : $visibility;
     }
 }
