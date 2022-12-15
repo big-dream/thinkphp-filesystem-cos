@@ -42,14 +42,25 @@ class CosAdapter implements FilesystemAdapter
     {
         $this->config = array_merge(
             [
-                'bucket' => null,
-                'app_id' => null,
-                'region' => 'ap-guangzhou',
+                // 储存桶名称
+                'bucket'     => '',
+                // 应用ID
+                'app_id'     => '',
+                // 密钥ID
+                'secret_id'  => '',
+                // 密钥KEY
+                'secret_key' => '',
+                // 请求协议
+                'schema'     => 'http',
+                // 地域
+                'region'     => 'ap-guangzhou',
+                // 路径前缀
+                'prefix'     => '',
             ],
             $config
         );
 
-        $this->prefixer = new PathPrefixer($config['prefix'] ?? '', DIRECTORY_SEPARATOR);
+        $this->prefixer = new PathPrefixer($this->config['prefix'], '/');
     }
 
     public function fileExists(string $path): bool
