@@ -1,8 +1,5 @@
-# ThinkPHP 6.1 文件系统驱动 COS 腾讯云对象储存
-
-内含以下文件系统驱动
-
-* [腾讯云对象储存](#cos)
+# ThinkPHP 6.1 COS 文件系统驱动
+适用于 topthink/think-filesystem 的腾讯云对象储存(COS)驱动
 
 ## 安装
 ```
@@ -11,6 +8,7 @@ composer require big-dream/thinkphp-filesystem-cos:2.*
 
 ## 配置
 编辑`config/filesystem.php`文件，在该文件里增加一项磁盘配置信息。
+
 ```php
 <?php
 
@@ -37,25 +35,24 @@ return [
         /** 以下为新增的磁盘配置信息 **/
         'cos' => [
             'type' => \bigDream\thinkphp\filesystem\Cos::class,
-            // 可见性（public=公共读，private=私有读）
-            'visibility' => 'public',
-            // 磁盘路径对应的外部URL路径（Bucket域名）
-            'url'      => 'https://test.gdoss.xstore.ctyun.cn',
-            // 必填，app_id、secret_id、secret_key
-            // 可在个人秘钥管理页查看：https://console.cloud.tencent.com/capi
-            'app_id' => 10020201024,
-            'secret_id' => 'AKIDsiQzQla780mQxLLU2GJCxxxxxxxxxxx',
-            'secret_key' => 'b0GMH2c2NXWKxPhy77xhHgwxxxxxxxxxxx',
+            // 磁盘路径对应的外部URL路径
+            'url'        => 'https://example-10020201024.cos.ap-guangzhou.myqcloud.com',
+            // 请求协议
+            'schema'     => 'http',
+            // 可见性
+            'visibility' => '',
             // 地域
-            'region' => 'ap-guangzhou',
-            // 储存桶
-            'bucket' => 'example',
-    
-            // 可选，如果 bucket 为私有访问请打开此项
-            'signed_url' => false,
-    
-            // 可选，使用 CDN 域名时指定生成的 URL host
-            'cdn' => 'https://youcdn.domain.com/',
+            'region'     => 'ap-guangzhou',
+            // 应用ID
+            'app_id'     => 10020201024,
+            // 密钥ID
+            'secret_id'  => 'AKIDsiQzQla780mQxLLU2GJCxxxxxxxxxxx',
+            // 密钥KEY
+            'secret_key' => 'b0GMH2c2NXWKxPhy77xhHgwxxxxxxxxxxx',
+            // 储存桶名称
+            'bucket'     => 'example',
+            // 路径前缀
+            'prefix'     => '',
         ],
         /** 以上为新增的磁盘配置信息 **/
 
@@ -72,17 +69,16 @@ app/controller/Index.php：
 <?php
 namespace app\controller;
 
-use app\BaseController;
-use think\facade\Filesystem;
-use think\facade\Request;
-
-class Index extends BaseController
+class Index
 {
     public function index()
     {
         // 如果是GET请求则显示上传表单界面
-        if (Request::isGet()) {
-            return view();
+        if (\think\facade\Request::isGet()) {
+            return '<form action="" method="post" enctype="multipart/form-data">'
+                . '<input type="file" name="file">'
+                . '<button type="submit">Upload</button>'
+                . '</form>';
         }
 
         try {
@@ -93,11 +89,14 @@ class Index extends BaseController
                 // 异常代码使用UPLOAD_ERR_NO_FILE常量，方便需要进一步处理异常时使用
                 throw new \Exception('请上传文件', UPLOAD_ERR_NO_FILE);
             }
-            // 保存路径
-            $dir = 'avatar';
-            $path = Filesystem::disk('cos')->putFile($dir, $file);
-            // 拼接URL路径
-            $url = \think\facade\Filesystem::getDiskConfig('cos', 'url') . '/' . str_replace('\\', '/', $path);
+
+            // 获取磁盘实例
+            $disk = \think\facade\Filesystem::disk('cos');
+
+            // 保存文件到 avatar 目录
+            $path = $disk->putFile('avatar', $file);
+            // 获取 URL
+            $url = $disk->url($path);
         } catch (\Exception $e) {
             // 如果上传时有异常，会执行这里的代码，可以在这里处理异常
             return json([
@@ -109,7 +108,7 @@ class Index extends BaseController
         $info = [
             // 文件路径：avatar/a4/e7b9e4ce42e2097b0df2feb8832d28.jpg
             'path' => $path,
-            // URL路径：/storage/avatar/a4/e7b9e4ce42e2097b0df2feb8832d28.jpg
+            // URL路径：https://example-10020201024.cos.ap-guangzhou.myqcloud.com/storage/avatar/a4/e7b9e4ce42e2097b0df2feb8832d28.jpg
             'url'  => $url,
             // 文件大小（字节）
             'size' => $file->getSize(),
@@ -121,22 +120,4 @@ class Index extends BaseController
         halt($info);
     }
 }
-```
-
-### 示例模板文件
-view/index/index.html：
-```html
-<!DOCTYPE html>
-<html lang="zh-cn">
-<head>
-    <meta charset="UTF-8">
-    <title>测试上传</title>
-</head>
-<body>
-<form action="" method="post" enctype="multipart/form-data">
-    <input type="file" name="file"><br/>
-    <button type="submit">提交</button>
-</form>
-</body>
-</html>
 ```
