@@ -120,12 +120,16 @@ class CosAdapter implements FilesystemAdapter
 
     public function deleteDirectory(string $path): void
     {
-        $list = [];
+        $objects = [];
         foreach ($this->listContents($path . '/', true) as $item) {
-            $list[] = $item->path();
+            $objects[]['Key'] = $item->path();
         }
 
-        foreach (array_reverse($list) as $path) $this->delete($path);
+        try {
+            $this->getClient()->deleteObjects(['Bucket' => $this->getBucket(), 'Objects' => $objects]);
+        } catch (Exception $e) {
+            throw UnableToDeleteFile::atLocation($path, $e->getMessage());
+        }
     }
 
     public function createDirectory(string $path, Config $config): void
@@ -169,7 +173,7 @@ class CosAdapter implements FilesystemAdapter
     public function mimeType(string $path): FileAttributes
     {
         $meta = $this->getMetadata($path);
-        if ($meta->mimeType() === null) {
+        if (null === $meta->mimeType()) {
             throw UnableToRetrieveMetadata::mimeType($path);
         }
         return $meta;
@@ -178,7 +182,7 @@ class CosAdapter implements FilesystemAdapter
     public function lastModified(string $path): FileAttributes
     {
         $meta = $this->getMetadata($path);
-        if ($meta->lastModified() === null) {
+        if (null === $meta->lastModified()) {
             throw UnableToRetrieveMetadata::lastModified($path);
         }
 
@@ -188,7 +192,7 @@ class CosAdapter implements FilesystemAdapter
     public function fileSize(string $path): FileAttributes
     {
         $meta = $this->getMetadata($path);
-        if ($meta->fileSize() === null) {
+        if (null === $meta->fileSize()) {
             throw UnableToRetrieveMetadata::fileSize($path);
         }
 
@@ -238,15 +242,10 @@ class CosAdapter implements FilesystemAdapter
             'Key'    => $prefixedSource,
         ];
 
-        $options = [
-            'x-cos-copy-source' => $prefixedSource,
-        ];
-
         try {
-            /** @var Result $response */
-            $this->getClient()->copy($this->getBucket(), $prefixedDestination, $copySource, $options);
+            $this->getClient()->copy($this->getBucket(), $prefixedDestination, $copySource);
         } catch (Exception $e) {
-            throw UnableToCopyFile::fromLocationTo($prefixedSource, $prefixedDestination, $e);
+            throw UnableToCopyFile::fromLocationTo($source, $prefixedDestination, $e);
         }
     }
 
@@ -255,13 +254,8 @@ class CosAdapter implements FilesystemAdapter
         $prefixedPath = $this->prefixer->prefixPath($path);
 
         try {
-            /**
-             * @var Result $response
-             */
-            $response = $this->getClient()->headObject([
-                'Bucket' => $this->getBucket(),
-                'Key' => $prefixedPath,
-            ]);
+            /** @var Result $response */
+            $response = $this->getClient()->headObject(['Bucket' => $this->getBucket(), 'Key' => $prefixedPath]);
         } catch (Exception $e) {
             throw new UnableToRetrieveMetadata($e->getMessage(), 0, $e);
         }
@@ -276,16 +270,16 @@ class CosAdapter implements FilesystemAdapter
         );
     }
 
-    public function getClient()
+    public function getClient(): Client
     {
-        return $this->client ?? $this->client = new Client(array(
+        return $this->client ?? $this->client = new Client([
             'region' => $this->config['region'],
             'schema' => $this->config['schema'],
-            'credentials' => array(
+            'credentials' => [
                 'secretId'  => $this->config['secret_id'],
                 'secretKey' => $this->config['secret_key'],
-            )
-        ));
+            ]
+        ]);
     }
 
     protected function getBucket(): string
