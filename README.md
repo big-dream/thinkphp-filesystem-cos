@@ -1,4 +1,4 @@
-# ThinkPHP 文件系统驱动 COS 腾讯云对象储存
+# ThinkPHP 6.0 文件系统驱动 COS 腾讯云对象储存
 
 内含以下文件系统驱动
 
@@ -6,7 +6,7 @@
 
 ## 安装
 ```
-composer require big-dream/thinkphp-filesystem-cos
+composer require big-dream/thinkphp-filesystem-cos:1.*
 ```
 
 ## 配置
