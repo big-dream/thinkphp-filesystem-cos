@@ -18,7 +18,7 @@
     ],
     "require": {
       "php": ">=8.1.0",
-      "topthink/think-filesystem": "^2.0",
+      "topthink/think-filesystem": "dev-master",
       "overtrue/qcloud-cos-client": "^2.0"
     },
     "autoload": {
