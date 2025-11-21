@@ -46,9 +46,15 @@ class Cos extends Driver
      */
     protected $normalizer;
 
+    /**
+     * Cos 适配器
+     * @var CosAdapter
+     */
+    protected CosAdapter $adapter;
+
     protected function createAdapter(): FilesystemAdapter
     {
-        return new CosAdapter($this->config);
+        return $this->adapter = new CosAdapter($this->config);
     }
 
     protected function prefixer()
@@ -84,5 +90,14 @@ class Cos extends Driver
         }
 
         return parent::url($path);
+    }
+
+    /**
+     * 获取适配器
+     * @return CosAdapter
+     */
+    public function getAdapter(): CosAdapter
+    {
+        return $this->adapter;
     }
 }
