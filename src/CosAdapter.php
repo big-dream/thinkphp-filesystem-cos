@@ -71,6 +71,11 @@ class CosAdapter implements FilesystemAdapter
         $this->prefixer = new PathPrefixer($this->config['prefix'], '/');
     }
 
+    /**
+     * 检测文件是否存在
+     * @param string $path
+     * @return bool
+     */
     public function fileExists(string $path): bool
     {
         try {
@@ -83,6 +88,16 @@ class CosAdapter implements FilesystemAdapter
         }
 
         return true;
+    }
+
+    /**
+     * 检测目录是否存在
+     * @param string $path
+     * @return bool
+     */
+    public function directoryExists(string $path): bool
+    {
+        return $this->fileExists($path);
     }
 
     public function write(string $path, string $contents, Config $config): void
