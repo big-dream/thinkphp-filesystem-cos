@@ -1,7 +1,7 @@
 {
     "name": "big-dream/thinkphp-filesystem-cos",
-    "description": "ThinkPHP 6.1 文件系统驱动 COS 版",
-    "version": "3.0.0",
+    "description": "ThinkPHP 8 文件系统驱动 COS 版",
+    "version": "4.0.0",
     "keywords": [
       "thinkphp",
       "filesystem",
@@ -17,8 +17,8 @@
       }
     ],
     "require": {
-      "php": ">=8.1.0",
-      "topthink/think-filesystem": "dev-master",
+      "php": ">=8.2.0",
+      "topthink/think-filesystem": "^3.0",
       "overtrue/qcloud-cos-client": "^2.0"
     },
     "autoload": {

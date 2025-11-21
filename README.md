@@ -1,10 +1,10 @@
-# ThinkPHP 6.1 COS 文件系统驱动
+# ThinkPHP 8 COS 文件系统驱动
+
 适用于 topthink/think-filesystem 的腾讯云对象储存(COS)驱动。
-相比 2.0 版本，3.0 版本改为使用 `overtrue/qcloud-cos-client`，PHP 版本要求提高到 8.1，以满足高版本 PHP 的使用需求。
 
 ## 安装
 ```
-composer require big-dream/thinkphp-filesystem-cos:3.*
+composer require big-dream/thinkphp-filesystem-cos:dev-main
 ```
 
 ## 配置
@@ -122,3 +122,8 @@ class Index
     }
 }
 ```
+
+## 依赖
+
+* https://github.com/top-think/think-filesystem/tree/3.0
+* https://github.com/overtrue/qcloud-cos-client
