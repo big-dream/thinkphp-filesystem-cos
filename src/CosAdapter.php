@@ -285,6 +285,11 @@ class CosAdapter implements FilesystemAdapter
         }
     }
 
+    /**
+     * 获取文件元信息
+     * @param string $path
+     * @return FileAttributes
+     */
     public function getMetadata($path): FileAttributes
     {
         $prefixedPath = $this->prefixer->prefixPath($path);
@@ -299,6 +304,47 @@ class CosAdapter implements FilesystemAdapter
             $meta['Content-Type'][0] ?? null,
             $meta
         );
+    }
+
+    /**
+     * 设置文件元信息
+     * @param string $path
+     * @param array $metadata
+     * @return void
+     * @throws \Overtrue\CosClient\Exceptions\InvalidArgumentException
+     */
+    public function setMetadata($path, $metadata): void
+    {
+        $originMeta = $this->getMetadata($path);
+
+        $headers = [
+            'Content-Type' => $originMeta->mimeType(),
+            'x-cos-metadata-directive' => 'Replaced',
+            'x-cos-copy-source' => sprintf(
+                '%s-%s.cos.%s.myqcloud.com/%s',
+                $this->config['bucket'],
+                $this->config['app_id'],
+                $this->config['region'],
+                $path
+            )
+        ];
+        foreach ($originMeta->extraMetadata() as $key => $value) {
+            if (str_starts_with($key, 'x-cos-meta-')) {
+                $headers[$key] = $value[0];
+            }
+        }
+
+        $headers = array_merge($headers, $metadata);
+
+        try {
+            $this->getObjectClient()->copyObject($path, $headers);
+        } catch (ClientException $e) {
+            $message = $e->getResponse()['Message'];
+
+            throw null === $message
+                ? UnableToCopyFile::fromLocationTo($path, $path, $e)
+                : UnableToCopyFile::because($message, $path, $path);
+        }
     }
 
     public function getBucketClient(): BucketClient
