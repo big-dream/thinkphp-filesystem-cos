@@ -8,7 +8,7 @@ composer require big-dream/thinkphp-filesystem-cos:dev-main
 ```
 
 ## 配置
-编辑`config/filesystem.php`文件，在该文件里增加一项磁盘配置信息。
+编辑 `config/filesystem.php` 文件，在该文件里增加一项磁盘配置信息。
 
 ```php
 <?php

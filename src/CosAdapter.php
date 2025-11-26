@@ -236,14 +236,14 @@ class CosAdapter implements FilesystemAdapter
             'delimiter' => $deep ? '' : '/',
         ]);
 
-        $list = $response['ListBucketResult']['CommonPrefixes'] ?? [];
+        $list = $response['CommonPrefixes'] ?? [];
         // 只有一个目录时返回关联数组
         foreach (array_is_list($list) ? $list : [$list] as $item)
         {
             yield new DirectoryAttributes($item['Prefix']);
         }
 
-        $list = $response['ListBucketResult']['Contents'] ?? [];
+        $list = $response['Contents'] ?? [];
         // 只有一个文件时返回关联数组
         foreach (array_is_list($list) ? $list : [$list] as $item)
         {
